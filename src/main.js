@@ -1,44 +1,59 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 import { solveLeg } from './ik/fabrik.js';
 import { GaitController } from './gait/gait.js';
+import { PelvisController } from './gait/pelvis.js';
+import { Keyboard } from './input/keyboard.js';
+
+// se il ragno cammina all'indietro rispetto al muso, metti -1
+const FORWARD = 1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a1a);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
-camera.position.set(3, 2, 4);
+camera.position.set(0, 3, -5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1, 0);
-
 scene.add(new THREE.DirectionalLight(0xffffff, 2));
 scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-scene.add(new THREE.GridHelper(20, 20));
+scene.add(new THREE.GridHelper(60, 60));
 
-let spider = null, chains = null, gait = null;
-const debug = { autoWalk: false, walkSpeed: 0.8, turnSpeed: 0.5, showTargets: true };
+const keyboard = new Keyboard();
+
+// root logico: input e gait lavorano su questo; il modello è figlio
+const spiderRoot = new THREE.Group();
+scene.add(spiderRoot);
+
+let model = null, chains = null, gait = null, pelvis = null;
+
+const params = {
+  moveSpeed: 1.5,
+  turnSpeed: 2.2,
+  camDistance: 4.5,
+  camHeight: 2.2,
+  camLag: 4,
+  tiltAmount: 0.06,
+  showTargets: false,
+};
+
 const targetMeshes = [];
 
-const loader = new FBXLoader();
-loader.load('models/spider.fbx', (fbx) => {
-  spider = fbx;
+new FBXLoader().load('models/spider.fbx', (fbx) => {
+  model = fbx;
   const size = new THREE.Box3().setFromObject(fbx).getSize(new THREE.Vector3());
   fbx.scale.setScalar(2.5 / Math.max(size.x, size.z));
   fbx.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(fbx);
   fbx.position.y -= box.min.y;
-  fbx.updateMatrixWorld(true);
 
-  scene.add(fbx);
-  scene.add(new THREE.SkeletonHelper(fbx));
+  spiderRoot.add(fbx);
+  spiderRoot.updateMatrixWorld(true);
 
   const suffixes = ['', '001', '002', '003'];
   chains = [];
@@ -51,65 +66,86 @@ loader.load('models/spider.fbx', (fbx) => {
     }
   }
 
-  gait = new GaitController(fbx, chains);
+  gait = new GaitController(spiderRoot, chains);
+  pelvis = new PelvisController(fbx.getObjectByName('Pelvis'));
 
-  // sferette di debug sui target
   const mat = new THREE.MeshBasicMaterial({ color: 0x33ff88 });
   for (const leg of gait.legs) {
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.04), mat);
-    m.position.copy(leg.target);
     scene.add(m);
     targetMeshes.push(m);
   }
 
-  // GUI: tuning gait + movimento di test
   const gui = new GUI();
   const g = gui.addFolder('Gait');
   g.add(gait.params, 'stepThreshold', 0.1, 0.8, 0.01);
   g.add(gait.params, 'stepDuration', 0.08, 0.6, 0.01);
   g.add(gait.params, 'stepHeight', 0.05, 0.5, 0.01);
   g.add(gait.params, 'leadFactor', 0, 0.5, 0.01);
-  const d = gui.addFolder('Debug');
-  d.add(debug, 'autoWalk').name('auto walk (cerchio)');
-  d.add(debug, 'walkSpeed', 0.2, 2, 0.01);
-  d.add(debug, 'turnSpeed', 0, 1.5, 0.01);
-  d.add(debug, 'showTargets');
-  gui.add(spider.position, 'x', -5, 5, 0.01).name('body x (manuale)');
-  gui.add(spider.position, 'z', -5, 5, 0.01).name('body z (manuale)');
-  gui.add(spider.rotation, 'y', -Math.PI, Math.PI, 0.01).name('body yaw (manuale)');
+  const pv = gui.addFolder('Pelvis');
+  pv.add(pelvis.params, 'stiffness', 20, 300, 1);
+  pv.add(pelvis.params, 'damping', 2, 30, 0.5);
+  pv.add(pelvis.params, 'bobAmp', 0, 0.15, 0.005);
+  pv.add(pelvis.params, 'swayAmp', 0, 0.15, 0.005);
+  pv.add(pelvis.params, 'freq', 2, 15, 0.5);
+  const mv = gui.addFolder('Movement');
+  mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
+  mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
+  mv.add(params, 'tiltAmount', 0, 0.15, 0.005);
+  gui.add(params, 'showTargets');
 }, undefined, (err) => console.error('Errore FBX:', err));
 
 const clock = new THREE.Clock();
 const prevPos = new THREE.Vector3();
 const velocity = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _camGoal = new THREE.Vector3();
+const _lookAt = new THREE.Vector3();
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  if (spider && gait) {
-    // movimento di test: cerchio automatico
-    if (debug.autoWalk) {
-      spider.rotation.y += debug.turnSpeed * dt;
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(spider.quaternion);
-      spider.position.addScaledVector(fwd, debug.walkSpeed * dt);
-    }
-    spider.updateMatrixWorld(true);
+  if (model && gait) {
+    // --- input: W/S avanti-indietro, A/D ruota ---
+    const move = keyboard.axis('KeyS', 'KeyW');
+    const turn = keyboard.axis('KeyD', 'KeyA');
 
-    // velocità del corpo (da qualunque fonte: slider o autoWalk)
-    velocity.copy(spider.position).sub(prevPos).divideScalar(Math.max(dt, 1e-4));
+    spiderRoot.rotation.y += turn * params.turnSpeed * dt;
+    _fwd.set(0, 0, FORWARD).applyQuaternion(spiderRoot.quaternion);
+    spiderRoot.position.addScaledVector(_fwd, move * params.moveSpeed * dt);
+
+    // --- tilt del corpo: pitch quando avanza, roll quando gira ---
+    const targetPitch = -move * params.tiltAmount;
+    const targetRoll = -turn * params.tiltAmount * 0.8;
+    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, targetPitch, 6, dt);
+    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, targetRoll, 6, dt);
+
+    // --- velocità reale del root ---
+    velocity.copy(spiderRoot.position).sub(prevPos).divideScalar(Math.max(dt, 1e-4));
     velocity.y = 0;
-    prevPos.copy(spider.position);
+    prevPos.copy(spiderRoot.position);
 
+    // --- pelvis sway, poi gait, poi IK (l'ordine conta) ---
+    pelvis.update(dt, velocity.length());
+    spiderRoot.updateMatrixWorld(true);
     gait.update(dt, velocity);
 
     for (let i = 0; i < chains.length; i++) {
       solveLeg(chains[i], gait.legs[i].target);
       targetMeshes[i].position.copy(gait.legs[i].target);
-      targetMeshes[i].visible = debug.showTargets;
+      targetMeshes[i].visible = params.showTargets;
     }
+
+    // --- camera follow: dietro e sopra, con lag esponenziale ---
+    _camGoal.set(0, 0, -FORWARD * params.camDistance)
+      .applyQuaternion(spiderRoot.quaternion)
+      .add(spiderRoot.position);
+    _camGoal.y += params.camHeight;
+    camera.position.lerp(_camGoal, 1 - Math.exp(-params.camLag * dt));
+    _lookAt.copy(spiderRoot.position); _lookAt.y += 0.8;
+    camera.lookAt(_lookAt);
   }
 
-  controls.update();
   renderer.render(scene, camera);
 });
 

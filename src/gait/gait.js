@@ -8,9 +8,9 @@ export class GaitController {
     this.body = body;
     this.params = {
       stepThreshold: 0.35, // distanza piede-home oltre cui scatta il passo
-      stepDuration: 0.22,  // durata del passo in secondi
-      stepHeight: 0.22,    // altezza dell'arco
-      leadFactor: 0.15,    // anticipo nella direzione del movimento
+      stepDuration: 0.2,  // durata del passo in secondi
+      stepHeight: 0.25,    // altezza dell'arco
+      leadFactor: 0.33,    // anticipo nella direzione del movimento
       ...params
     };
 
