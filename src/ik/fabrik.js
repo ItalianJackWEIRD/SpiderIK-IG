@@ -51,13 +51,45 @@ export function alignBoneToward(bone, child, solvedChildPos) {
   bone.updateMatrixWorld(true);
 }
 
+/**
+ * Vincolo di pole vector: ruota il giunto intermedio attorno all'asse
+ * root→end così che il "ginocchio" pieghi sempre verso il pole.
+ * Ruotando attorno a quell'asse le lunghezze dei segmenti restano intatte.
+ */
+export function applyPoleConstraint(points, poleWorld) {
+  const [p0, p1, p2] = points;
+
+  const axis = p2.clone().sub(p0);
+  const axisLen = axis.length();
+  if (axisLen < 1e-6) return;
+  axis.divideScalar(axisLen);
+
+  // proiezione del ginocchio sull'asse root→end
+  const proj = p0.clone().addScaledVector(axis, p1.clone().sub(p0).dot(axis));
+  const bendLen = p1.distanceTo(proj);
+
+  // direzione desiderata: verso il pole, ortogonale all'asse
+  const toPole = poleWorld.clone().sub(proj);
+  toPole.addScaledVector(axis, -toPole.dot(axis));
+  if (toPole.lengthSq() < 1e-8) return;
+  toPole.normalize();
+
+  p1.copy(proj).addScaledVector(toPole, bendLen);
+}
+
+const _up = new THREE.Vector3(0, 1, 0);
+
 /** Risolve una catena [thigh, calf, foot] verso un target world-space. */
-export function solveLeg(chain, targetWorld) {
+export function solveLeg(chain, targetWorld, poleUp = 1.0) {
   const p = chain.map(b => b.getWorldPosition(new THREE.Vector3()));
   const lengths = [p[0].distanceTo(p[1]), p[1].distanceTo(p[2])];
 
   solveFABRIK(p, lengths, targetWorld);
 
-  alignBoneToward(chain[0], chain[1], p[1]); // thigh → posizione risolta del calf
-  alignBoneToward(chain[1], chain[2], p[2]); // calf  → posizione risolta del foot
+  // pole: sopra il punto medio spalla-target → il ginocchio piega sempre in su
+  const pole = p[0].clone().add(targetWorld).multiplyScalar(0.5).addScaledVector(_up, poleUp);
+  applyPoleConstraint(p, pole);
+
+  alignBoneToward(chain[0], chain[1], p[1]);
+  alignBoneToward(chain[1], chain[2], p[2]);
 }
