@@ -67,7 +67,7 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   }
 
   gait = new GaitController(spiderRoot, chains);
-  pelvis = new PelvisController(fbx.getObjectByName('Pelvis'));
+  pelvis = new PelvisController(fbx.getObjectByName('Pelvis'), spiderRoot);
 
   const mat = new THREE.MeshBasicMaterial({ color: 0x33ff88 });
   for (const leg of gait.legs) {
@@ -88,6 +88,10 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   pv.add(pelvis.params, 'bobAmp', 0, 0.15, 0.005);
   pv.add(pelvis.params, 'swayAmp', 0, 0.15, 0.005);
   pv.add(pelvis.params, 'freq', 2, 15, 0.5);
+  pv.add(pelvis.params, 'liftAmp', 0, 0.5, 0.005);
+  pv.add(pelvis.params, 'ramp', 1, 10, 0.1);
+  pv.add(pelvis.params, 'idleAmp', 0, 0.06, 0.002);
+  pv.add(pelvis.params, 'idleFreq', 0.5, 4, 0.1);
   const mv = gui.addFolder('Movement');
   mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
   mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
