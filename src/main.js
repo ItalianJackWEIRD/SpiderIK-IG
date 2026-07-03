@@ -33,7 +33,7 @@ scene.add(spiderRoot);
 let model = null, chains = null, gait = null, pelvis = null;
 
 const params = {
-  moveSpeed: 1.5,
+  moveSpeed: 2.2,
   turnSpeed: 2.2,
   camDistance: 4.5,
   camHeight: 2.2,

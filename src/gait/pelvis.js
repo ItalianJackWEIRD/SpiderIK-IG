@@ -18,11 +18,11 @@ export class PelvisController {
     this.vel = new THREE.Vector3();
     this.phase = 0;
     this.params = {
-      stiffness: 120,
-      damping: 14,
+      stiffness: 95,
+      damping: 5,
       bobAmp: 0.1,
       swayAmp: 0.045,
-      freq: 5.5,
+      freq: 6.5,
     };
   }
 
