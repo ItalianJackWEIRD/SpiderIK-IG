@@ -20,8 +20,8 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.DirectionalLight(0xffffff, 2));
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+// weak ambient fill; the main light is the spotlight parented to the spider
+scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 scene.add(new THREE.GridHelper(60, 60));
 
 const keyboard = new Keyboard();
@@ -29,6 +29,14 @@ const keyboard = new Keyboard();
 // root logico: input e gait lavorano su questo; il modello è figlio
 const spiderRoot = new THREE.Group();
 scene.add(spiderRoot);
+
+// --- spotlight above the spider: parented to the root so it follows ---
+const spotTarget = new THREE.Object3D();
+spiderRoot.add(spotTarget);
+const spot = new THREE.SpotLight(0xffffff, 100, 0, Math.PI / 5, 0.6, 1.8);
+spot.position.set(0, 4, 0);
+spot.target = spotTarget;
+spiderRoot.add(spot);
 
 let model = null, chains = null, gait = null, pelvis = null;
 
@@ -51,6 +59,28 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   fbx.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(fbx);
   fbx.position.y -= box.min.y;
+
+  // --- spider materials from the 4 Unreal-exported maps ---
+  const texLoader = new THREE.TextureLoader();
+  const colorMap = texLoader.load('textures/spider/texture.PNG');
+  colorMap.colorSpace = THREE.SRGBColorSpace; // only the color map is sRGB
+  const normalMap = texLoader.load('textures/spider/NormalMap.PNG');
+  const specularMap = texLoader.load('textures/spider/SpecularMap.PNG');
+  const aoMap = texLoader.load('textures/spider/AmbientOcclusionMap.PNG');
+  aoMap.channel = 0; // mesh has a single UV channel (aoMap defaults to uv2)
+
+  let spiderMat = null;
+  fbx.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = spiderMat = new THREE.MeshPhongMaterial({
+      map: colorMap,
+      normalMap,
+      normalScale: new THREE.Vector2(1, 1), // OpenGL-convention normal map (flipped Y)
+      specularMap,
+      aoMap,
+      shininess: 30,
+    });
+  });
 
   spiderRoot.add(fbx);
   spiderRoot.updateMatrixWorld(true);
@@ -92,6 +122,13 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   pv.add(pelvis.params, 'ramp', 1, 10, 0.1);
   pv.add(pelvis.params, 'idleAmp', 0, 0.06, 0.002);
   pv.add(pelvis.params, 'idleFreq', 0.5, 4, 0.1);
+  const lt = gui.addFolder('Light');
+  lt.add(spot, 'intensity', 0, 300, 1);
+  lt.add(spot.position, 'y', 1, 10, 0.1).name('height');
+  lt.add(spot, 'angle', 0.1, Math.PI / 2, 0.01);
+  lt.add(spot, 'penumbra', 0, 1, 0.01);
+  lt.add(spot, 'decay', 0, 3, 0.05);
+  lt.add(spiderMat.normalScale, 'y', { 'DirectX (-1)': -1, 'OpenGL (+1)': 1 }).name('normalMapY');
   const mv = gui.addFolder('Movement');
   mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
   mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
