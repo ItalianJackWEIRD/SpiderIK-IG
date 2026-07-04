@@ -38,7 +38,7 @@ export class PelvisController {
   update(dt, speed) {
     const p = this.params;
 
-    const kTarget = THREE.MathUtils.clamp(speed / 1.5, 0, 1);
+    const kTarget = THREE.MathUtils.clamp(speed / 2.2, 0, 1);
     this.k = THREE.MathUtils.damp(this.k, kTarget, p.ramp, dt);
     const k = this.k;
 

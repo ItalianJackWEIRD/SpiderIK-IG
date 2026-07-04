@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 import { solveLeg } from './ik/fabrik.js';
 import { GaitController } from './gait/gait.js';
 import { PelvisController } from './gait/pelvis.js';
 import { Keyboard } from './input/keyboard.js';
+import { makeCurved, curveUniforms } from './world/curvature.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -20,9 +22,63 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
+// --- orbit camera (mouse), alternativa alla follow cam ---
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+orbit.enablePan = false;
+orbit.minDistance = 2;
+orbit.maxDistance = 10;
+orbit.maxPolarAngle = Math.PI / 2 - 0.05;
+orbit.enabled = false; // si parte in follow
+
+// modalità camera: true = orbita col mouse, false = follow
+const cam = { orbitMode: false };
+
+
 // weak ambient fill; the main light is the spotlight parented to the spider
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-scene.add(new THREE.GridHelper(60, 60));
+
+// --- terreno: piano 120×120 suddiviso (i segmenti serviranno al curved shader) ---
+const groundParams = { repeatPeriod: 8 }; // unità world per ripetizione: DEVE dividere WRAP(40)
+
+const groundTexLoader = new THREE.TextureLoader();
+function loadGroundTex(path, srgb = false) {
+  const t = groundTexLoader.load(path);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); // nitidezza alle angolazioni radenti
+  return t;
+}
+
+const GROUND_SIZE = 120;
+const groundColor = loadGroundTex('textures/level1/ground_color.jpg', true);
+const groundNormal = loadGroundTex('textures/level1/ground_normal.jpg');
+const groundSpecular = loadGroundTex('textures/level1/ground_specular.jpg');
+
+const groundMat = new THREE.MeshPhongMaterial({
+  map: groundColor,
+  normalMap: groundNormal,
+  normalScale: new THREE.Vector2(1, -1), // Quixel = convenzione DirectX
+  specularMap: groundSpecular,
+  shininess: 8, // ghiaia opaca: riflesso basso e largo
+});
+
+const groundHeight = loadGroundTex('textures/level1/ground_height.jpg');
+curveUniforms.uHeightMap.value = groundHeight;
+makeCurved(groundMat, { withHeight: true });
+
+function setGroundRepeat(period) {
+  const n = GROUND_SIZE / period;
+  for (const t of [groundColor, groundNormal, groundSpecular]) t.repeat.set(n, n);
+}
+setGroundRepeat(groundParams.repeatPeriod);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 200, 200),
+  groundMat
+);
+ground.rotation.x = -Math.PI / 2; // il piano nasce verticale (XY): giù piatto
+scene.add(ground);
 
 const keyboard = new Keyboard();
 
@@ -30,13 +86,18 @@ const keyboard = new Keyboard();
 const spiderRoot = new THREE.Group();
 scene.add(spiderRoot);
 
-// --- spotlight above the spider: parented to the root so it follows ---
-const spotTarget = new THREE.Object3D();
-spiderRoot.add(spotTarget);
-const spot = new THREE.SpotLight(0xffffff, 100, 0, Math.PI / 5, 0.6, 1.8);
-spot.position.set(0, 4, 0);
-spot.target = spotTarget;
-spiderRoot.add(spot);
+// --- sole: luce direzionale fissa, uniforme su tutto il mondo ---
+const sun = new THREE.DirectionalLight(0xfff1dd, 8);
+scene.add(sun);
+const sunCtl = { azimuth: 4.82, elevation: 1.26 };
+function placeSun() {
+  sun.position.set(
+    Math.cos(sunCtl.azimuth) * Math.cos(sunCtl.elevation) * 60,
+    Math.sin(sunCtl.elevation) * 60,
+    Math.sin(sunCtl.azimuth) * Math.cos(sunCtl.elevation) * 60
+  );
+}
+placeSun();
 
 let model = null, chains = null, gait = null, pelvis = null;
 
@@ -50,6 +111,31 @@ const params = {
   showTargets: false,
 };
 
+const WRAP = 40; // lato della cella toroidale (il "perimetro" della luna)
+
+function shiftWorld(dx, dz) {
+  spiderRoot.position.x += dx; spiderRoot.position.z += dz;
+  prevPos.x += dx; prevPos.z += dz;
+  camera.position.x += dx; camera.position.z += dz;
+  orbit.target.x += dx; orbit.target.z += dz;
+  for (const leg of gait.legs) {
+    leg.planted.x += dx; leg.planted.z += dz;
+    leg.target.x += dx; leg.target.z += dz;
+    leg.from.x += dx; leg.from.z += dz;
+    leg.to.x += dx; leg.to.z += dz;
+  }
+  spiderRoot.updateMatrixWorld(true);
+}
+
+function wrapWorld() {
+  let dx = 0, dz = 0;
+  if (spiderRoot.position.x > WRAP / 2) dx = -WRAP;
+  if (spiderRoot.position.x < -WRAP / 2) dx = WRAP;
+  if (spiderRoot.position.z > WRAP / 2) dz = -WRAP;
+  if (spiderRoot.position.z < -WRAP / 2) dz = WRAP;
+  if (dx || dz) shiftWorld(dx, dz);
+}
+
 const targetMeshes = [];
 
 new FBXLoader().load('models/spider.fbx', (fbx) => {
@@ -62,12 +148,25 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
 
   // --- spider materials from the 4 Unreal-exported maps ---
   const texLoader = new THREE.TextureLoader();
-  const colorMap = texLoader.load('textures/spider/texture.PNG');
+  const colorMap = texLoader.load('textures/spider/texture.png');
   colorMap.colorSpace = THREE.SRGBColorSpace; // only the color map is sRGB
-  const normalMap = texLoader.load('textures/spider/NormalMap.PNG');
-  const specularMap = texLoader.load('textures/spider/SpecularMap.PNG');
-  const aoMap = texLoader.load('textures/spider/AmbientOcclusionMap.PNG');
+  const normalMap = texLoader.load('textures/spider/NormalMap.png');
+  const specularMap = texLoader.load('textures/spider/SpecularMap.png');
+  const aoMap = texLoader.load('textures/spider/AmbientOcclusionMap.png');
   aoMap.channel = 0; // mesh has a single UV channel (aoMap defaults to uv2)
+
+  // --- skybox: equirectangular galaxy panorama ---
+  const skyTex = new THREE.TextureLoader().load('textures/skybox1/galaxy1.jpg');
+  skyTex.mapping = THREE.EquirectangularReflectionMapping;
+  skyTex.colorSpace = THREE.SRGBColorSpace;
+  scene.background = skyTex;
+  scene.backgroundRotation.order = 'YXZ'; // prima yaw, poi tilt: si ragiona facile
+  const sky = { tilt: 2.56, yaw: 2.11 };
+  const applySky = () => {
+    scene.backgroundRotation.x = sky.tilt;
+    scene.backgroundRotation.y = sky.yaw;
+  };
+  applySky();
 
   let spiderMat = null;
   fbx.traverse((o) => {
@@ -123,17 +222,23 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   pv.add(pelvis.params, 'idleAmp', 0, 0.06, 0.002);
   pv.add(pelvis.params, 'idleFreq', 0.5, 4, 0.1);
   const lt = gui.addFolder('Light');
-  lt.add(spot, 'intensity', 0, 300, 1);
-  lt.add(spot.position, 'y', 1, 10, 0.1).name('height');
-  lt.add(spot, 'angle', 0.1, Math.PI / 2, 0.01);
-  lt.add(spot, 'penumbra', 0, 1, 0.01);
-  lt.add(spot, 'decay', 0, 3, 0.05);
+  lt.add(sun, 'intensity', 0, 8, 0.1).name('sun intensity');
+  lt.add(sunCtl, 'azimuth', 0, Math.PI * 2, 0.01).name('sun azimuth').onChange(placeSun);
+  lt.add(sunCtl, 'elevation', 0.1, Math.PI / 2, 0.01).name('sun elevation').onChange(placeSun);
   lt.add(spiderMat.normalScale, 'y', { 'DirectX (-1)': -1, 'OpenGL (+1)': 1 }).name('normalMapY');
   const mv = gui.addFolder('Movement');
   mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
   mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
   mv.add(params, 'tiltAmount', 0, 0.15, 0.005);
+  const w = gui.addFolder('World');
+  w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8]).name('texture period')
+    .onChange(setGroundRepeat);
+  w.add(groundMat, 'shininess', 0, 60, 1);
+  w.add(curveUniforms.uCurveR, 'value', 20, 200, 1).name('curve R');
+  w.add(curveUniforms.uHeightAmp, 'value', 0, 6, 0.1).name('horizon relief');
   gui.add(params, 'showTargets');
+  gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
+    .onChange(v => { orbit.enabled = v; });
 }, undefined, (err) => console.error('Errore FBX:', err));
 
 const clock = new THREE.Clock();
@@ -154,6 +259,10 @@ renderer.setAnimationLoop(() => {
     spiderRoot.rotation.y += turn * params.turnSpeed * dt;
     _fwd.set(0, 0, FORWARD).applyQuaternion(spiderRoot.quaternion);
     spiderRoot.position.addScaledVector(_fwd, move * params.moveSpeed * dt);
+
+    wrapWorld();
+
+    curveUniforms.uSpiderPos.value.set(spiderRoot.position.x, spiderRoot.position.z);
 
     // --- tilt del corpo: pitch quando avanza, roll quando gira ---
     const targetPitch = -move * params.tiltAmount;
@@ -177,14 +286,20 @@ renderer.setAnimationLoop(() => {
       targetMeshes[i].visible = params.showTargets;
     }
 
-    // --- camera follow: dietro e sopra, con lag esponenziale ---
-    _camGoal.set(0, 0, -FORWARD * params.camDistance)
-      .applyQuaternion(spiderRoot.quaternion)
-      .add(spiderRoot.position);
-    _camGoal.y += params.camHeight;
-    camera.position.lerp(_camGoal, 1 - Math.exp(-params.camLag * dt));
-    _lookAt.copy(spiderRoot.position); _lookAt.y += 0.8;
-    camera.lookAt(_lookAt);
+    // --- camera: orbit col mouse oppure follow ---
+    if (cam.orbitMode) {
+      orbit.target.copy(spiderRoot.position);
+      orbit.target.y += 0.8;
+      orbit.update();
+    } else {
+      _camGoal.set(0, 0, -FORWARD * params.camDistance)
+        .applyQuaternion(spiderRoot.quaternion)
+        .add(spiderRoot.position);
+      _camGoal.y += params.camHeight;
+      camera.position.lerp(_camGoal, 1 - Math.exp(-params.camLag * dt));
+      _lookAt.copy(spiderRoot.position); _lookAt.y += 0.8;
+      camera.lookAt(_lookAt);
+    }
   }
 
   renderer.render(scene, camera);
