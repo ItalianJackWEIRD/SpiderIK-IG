@@ -158,7 +158,7 @@ const params = {
 
 const stamina = {
   value: 1,
-  drainTime: 2.0,  // secondi di sprint continuo
+  drainTime: 1.8,  // secondi di sprint continuo
   regenTime: 6,    // secondi per ricarica completa
   cooldown: 1,     // pausa dopo esaurimento totale
   cdLeft: 0,
