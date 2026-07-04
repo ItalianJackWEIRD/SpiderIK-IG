@@ -1,6 +1,7 @@
 import { OrbManager } from './orbs.js';
 import { GameTimer } from './timer.js';
 import { initHUD, updateHUD, showGameOver } from '../ui/hud.js';
+import { initMusic } from '../audio/music.js';
 
 /**
  * Gameplay glue — the ONLY interface main.js will ever talk to:
@@ -22,6 +23,9 @@ export function initGame(scene) {
   score = 0;
   gameOver = false;
   initHUD();
+  // page-scoped: restart reloads the page, so this runs once per "session";
+  // move this call to the start-menu Play click when Phase 7 lands
+  initMusic();
   timer.onDeath(() => {
     gameOver = true;
     showGameOver(score);

@@ -30,8 +30,10 @@ export class PelvisController {
       freq: 7,
       liftAmp: 0.2,
       ramp: 1.8,
-      idleAmp: 0.02,
-      idleFreq: 1.6,
+      idleAmp: 0.125,
+      // breathing on the soundtrack beat (134 BPM → 2π·134/60 ≈ 14.03),
+      // tuned by ear to 14.45 (the spring lags slightly behind the target)
+      idleFreq: 14.45,
     };
   }
 
