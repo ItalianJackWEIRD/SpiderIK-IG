@@ -156,7 +156,7 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   aoMap.channel = 0; // mesh has a single UV channel (aoMap defaults to uv2)
 
   // --- skybox: equirectangular galaxy panorama ---
-  const skyTex = new THREE.TextureLoader().load('textures/skybox1/galaxy1.jpg');
+  const skyTex = new THREE.TextureLoader().load('textures/skybox1/galaxy1Stars.jpg');
   skyTex.mapping = THREE.EquirectangularReflectionMapping;
   skyTex.colorSpace = THREE.SRGBColorSpace;
   scene.background = skyTex;
