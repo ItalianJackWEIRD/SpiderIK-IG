@@ -8,6 +8,8 @@ import { PelvisController } from './gait/pelvis.js';
 import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
 import { playerState } from './game/state.js';
+// TEMP HOOKUP — do not commit: official wiring happens at merge
+import { initGame, updateGame } from './game/game.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -138,6 +140,8 @@ function placeSun() {
   );
 }
 placeSun();
+
+initGame(scene); // TEMP HOOKUP — do not commit
 
 let model = null, chains = null, gait = null, pelvis = null;
 
@@ -342,6 +346,8 @@ renderer.setAnimationLoop(() => {
     gait.params.stepDuration = sprinting ? gait.params.stepDurationSprint : gait.params.stepDurationWalk;
 
     wrapWorld();
+
+    updateGame(dt, clock.elapsedTime, spiderRoot.position); // TEMP HOOKUP — do not commit
 
     curveUniforms.uSpiderPos.value.set(spiderRoot.position.x, spiderRoot.position.z);
 
