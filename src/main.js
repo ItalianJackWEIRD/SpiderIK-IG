@@ -7,6 +7,7 @@ import { GaitController } from './gait/gait.js';
 import { PelvisController } from './gait/pelvis.js';
 import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
+import { playerState } from './game/state.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -103,12 +104,22 @@ let model = null, chains = null, gait = null, pelvis = null;
 
 const params = {
   moveSpeed: 2.2,
+  sprintMult: 1.8,
   turnSpeed: 2.2,
   camDistance: 4.5,
   camHeight: 2.2,
   camLag: 4,
   tiltAmount: 0.06,
   showTargets: false,
+};
+
+const stamina = {
+  value: 1,
+  drainTime: 3.5,  // secondi di sprint continuo
+  regenTime: 6,    // secondi per ricarica completa
+  cooldown: 1,     // pausa dopo esaurimento totale
+  cdLeft: 0,
+  exhausted: false,
 };
 
 const WRAP = 40; // lato della cella toroidale (il "perimetro" della luna)
@@ -230,6 +241,9 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
   mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
   mv.add(params, 'tiltAmount', 0, 0.15, 0.005);
+  mv.add(params, 'sprintMult', 1.2, 2.5, 0.05);
+  mv.add(stamina, 'drainTime', 1, 8, 0.1);
+  mv.add(stamina, 'regenTime', 2, 12, 0.1);
   const w = gui.addFolder('World');
   w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8]).name('texture period')
     .onChange(setGroundRepeat);
@@ -245,6 +259,8 @@ const clock = new THREE.Clock();
 const prevPos = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _moveDir = new THREE.Vector3();
 const _camGoal = new THREE.Vector3();
 const _lookAt = new THREE.Vector3();
 
@@ -254,19 +270,53 @@ renderer.setAnimationLoop(() => {
   if (model && gait) {
     // --- input: W/S avanti-indietro, A/D ruota ---
     const move = keyboard.axis('KeyS', 'KeyW');
-    const turn = keyboard.axis('KeyD', 'KeyA');
+    const strafe = keyboard.axis('KeyA', 'KeyD');
+    const turn = keyboard.axis('KeyE', 'KeyQ');
 
+    // --- sprint con stamina ---
+    const wantSprint = keyboard.isDown('ShiftLeft') || keyboard.isDown('ShiftRight');
+    const moving = move !== 0 || strafe !== 0;
+    let sprinting = wantSprint && moving && !stamina.exhausted && stamina.value > 0;
+
+    if (sprinting) {
+      stamina.value -= dt / stamina.drainTime;
+      if (stamina.value <= 0) {
+        stamina.value = 0;
+        stamina.exhausted = true;
+        stamina.cdLeft = stamina.cooldown;
+        sprinting = false;
+      }
+    } else if (stamina.cdLeft > 0) {
+      stamina.cdLeft -= dt;
+    } else {
+      stamina.value = Math.min(1, stamina.value + dt / stamina.regenTime);
+      if (stamina.exhausted && stamina.value > 0.25) stamina.exhausted = false;
+    }
+
+    playerState.stamina = stamina.value;
+    playerState.sprinting = sprinting;
+    playerState.exhausted = stamina.exhausted;
+
+    const speed = params.moveSpeed * (sprinting ? params.sprintMult : 1);
+
+    // --- movimento: fwd*move + right*strafe, normalizzato in diagonale ---
     spiderRoot.rotation.y += turn * params.turnSpeed * dt;
     _fwd.set(0, 0, FORWARD).applyQuaternion(spiderRoot.quaternion);
-    spiderRoot.position.addScaledVector(_fwd, move * params.moveSpeed * dt);
+    _right.set(-FORWARD, 0, 0).applyQuaternion(spiderRoot.quaternion);
+    _moveDir.copy(_fwd).multiplyScalar(move).addScaledVector(_right, strafe);
+    if (_moveDir.lengthSq() > 1) _moveDir.normalize();
+    spiderRoot.position.addScaledVector(_moveDir, speed * dt);
+
+    // gait più frenetico in sprint (mantiene stepDuration < threshold/speed)
+    gait.params.stepDuration = sprinting ? 0.15 : 0.25;
 
     wrapWorld();
 
     curveUniforms.uSpiderPos.value.set(spiderRoot.position.x, spiderRoot.position.z);
 
     // --- tilt del corpo: pitch quando avanza, roll quando gira ---
-    const targetPitch = -move * params.tiltAmount;
-    const targetRoll = -turn * params.tiltAmount * 0.8;
+    const targetPitch = -move * params.tiltAmount * (sprinting ? 1.6 : 1);
+    const targetRoll = (-turn * 0.8 - strafe * 0.9) * params.tiltAmount;
     model.rotation.x = THREE.MathUtils.damp(model.rotation.x, targetPitch, 6, dt);
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, targetRoll, 6, dt);
 
