@@ -104,7 +104,7 @@ let model = null, chains = null, gait = null, pelvis = null;
 
 const params = {
   moveSpeed: 2.2,
-  sprintMult: 1.8,
+  sprintMult: 2.5,
   turnSpeed: 2.2,
   camDistance: 4.5,
   camHeight: 2.2,
