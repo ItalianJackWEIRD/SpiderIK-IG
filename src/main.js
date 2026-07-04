@@ -13,7 +13,6 @@ import { playerState } from './game/state.js';
 const FORWARD = 1;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a1a);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
 camera.position.set(0, 3, -5);
@@ -39,47 +38,87 @@ const cam = { orbitMode: false };
 // weak ambient fill; the main light is the spotlight parented to the spider
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-// --- terreno: piano 120×120 suddiviso (i segmenti serviranno al curved shader) ---
-const groundParams = { repeatPeriod: 8 }; // unità world per ripetizione: DEVE dividere WRAP(40)
+// --- terreno: 3 set di texture switchabili (base dei livelli) ---
+const groundParams = { repeatPeriod: 8, set: 1 };
+const GROUND_SIZE = 120;
 
 const groundTexLoader = new THREE.TextureLoader();
 function loadGroundTex(path, srgb = false) {
   const t = groundTexLoader.load(path);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); // nitidezza alle angolazioni radenti
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return t;
 }
 
-const GROUND_SIZE = 120;
-const groundColor = loadGroundTex('textures/level1/ground_color.jpg', true);
-const groundNormal = loadGroundTex('textures/level1/ground_normal.jpg');
-const groundSpecular = loadGroundTex('textures/level1/ground_specular.jpg');
+const groundCache = new Map();
+function getGroundSet(i) {
+  if (!groundCache.has(i)) {
+    const base = `textures/levels/ground${i}_`;
+    groundCache.set(i, {
+      color: loadGroundTex(base + 'color.jpg', true),
+      normal: loadGroundTex(base + 'normal.jpg'),
+      specular: loadGroundTex(base + 'specular.jpg'),
+      height: loadGroundTex(base + 'height.jpg'),
+    });
+  }
+  return groundCache.get(i);
+}
 
 const groundMat = new THREE.MeshPhongMaterial({
-  map: groundColor,
-  normalMap: groundNormal,
   normalScale: new THREE.Vector2(1, -1), // Quixel = convenzione DirectX
-  specularMap: groundSpecular,
-  shininess: 8, // ghiaia opaca: riflesso basso e largo
+  shininess: 8,
 });
-
-const groundHeight = loadGroundTex('textures/level1/ground_height.jpg');
-curveUniforms.uHeightMap.value = groundHeight;
 makeCurved(groundMat, { withHeight: true });
 
 function setGroundRepeat(period) {
+  const s = getGroundSet(groundParams.set);
   const n = GROUND_SIZE / period;
-  for (const t of [groundColor, groundNormal, groundSpecular]) t.repeat.set(n, n);
+  for (const t of [s.color, s.normal, s.specular]) t.repeat.set(n, n);
 }
-setGroundRepeat(groundParams.repeatPeriod);
+
+function applyGround(i) {
+  groundParams.set = i;
+  const s = getGroundSet(i);
+  groundMat.map = s.color;
+  groundMat.normalMap = s.normal;
+  groundMat.specularMap = s.specular;
+  curveUniforms.uHeightMap.value = s.height;
+  setGroundRepeat(groundParams.repeatPeriod);
+  groundMat.needsUpdate = true; // il materiale acquisisce mappe: ricompila
+}
+applyGround(1);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 200, 200),
   groundMat
 );
-ground.rotation.x = -Math.PI / 2; // il piano nasce verticale (XY): giù piatto
+ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
+
+// --- skybox: 3 panorami switchabili ---
+const SKY_PATHS = [
+  'textures/skybox/galaxy1Stars.jpg',   // ← adatta ai nomi/cartella reali
+  'textures/skybox/galaxy2.jpg',
+  'textures/skybox/galaxy1.jpg',
+];
+const sky = { set: 1, tilt: 2.56, yaw: 2.11 };
+const skyCache = new Map();
+scene.backgroundRotation.order = 'YXZ';
+scene.backgroundRotation.x = sky.tilt;
+scene.backgroundRotation.y = sky.yaw;
+
+function applySky(i) {
+  sky.set = i;
+  if (!skyCache.has(i)) {
+    const t = new THREE.TextureLoader().load(SKY_PATHS[i - 1]);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    skyCache.set(i, t);
+  }
+  scene.background = skyCache.get(i);
+}
+applySky(1);
 
 const keyboard = new Keyboard();
 
@@ -166,19 +205,6 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   const aoMap = texLoader.load('textures/spider/AmbientOcclusionMap.png');
   aoMap.channel = 0; // mesh has a single UV channel (aoMap defaults to uv2)
 
-  // --- skybox: equirectangular galaxy panorama ---
-  const skyTex = new THREE.TextureLoader().load('textures/skybox1/galaxy1Stars.jpg');
-  skyTex.mapping = THREE.EquirectangularReflectionMapping;
-  skyTex.colorSpace = THREE.SRGBColorSpace;
-  scene.background = skyTex;
-  scene.backgroundRotation.order = 'YXZ'; // prima yaw, poi tilt: si ragiona facile
-  const sky = { tilt: 2.56, yaw: 2.11 };
-  const applySky = () => {
-    scene.backgroundRotation.x = sky.tilt;
-    scene.backgroundRotation.y = sky.yaw;
-  };
-  applySky();
-
   let spiderMat = null;
   fbx.traverse((o) => {
     if (!o.isMesh) return;
@@ -219,7 +245,8 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   const gui = new GUI();
   const g = gui.addFolder('Gait');
   g.add(gait.params, 'stepThreshold', 0.1, 0.8, 0.01);
-  g.add(gait.params, 'stepDuration', 0.08, 0.6, 0.01);
+  g.add(gait.params, 'stepDurationWalk', 0.08, 0.6, 0.01);
+  g.add(gait.params, 'stepDurationSprint', 0.08, 0.4, 0.01);
   g.add(gait.params, 'stepHeight', 0.05, 0.5, 0.01);
   g.add(gait.params, 'leadFactor', 0, 0.5, 0.01);
   const pv = gui.addFolder('Pelvis');
@@ -245,11 +272,15 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   mv.add(stamina, 'drainTime', 1, 8, 0.1);
   mv.add(stamina, 'regenTime', 2, 12, 0.1);
   const w = gui.addFolder('World');
-  w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8]).name('texture period')
+  w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8, 10, 20, 40]).name('texture period')
     .onChange(setGroundRepeat);
   w.add(groundMat, 'shininess', 0, 60, 1);
   w.add(curveUniforms.uCurveR, 'value', 20, 200, 1).name('curve R');
   w.add(curveUniforms.uHeightAmp, 'value', 0, 6, 0.1).name('horizon relief');
+  w.add(groundParams, 'set', { 'Ground 1': 1, 'Ground 2': 2, 'Ground 3': 3 })
+    .name('ground').onChange(applyGround);
+  w.add(sky, 'set', { 'Sky 1': 1, 'Sky 2': 2, 'Sky 3': 3 })
+    .name('skybox').onChange(applySky);
   gui.add(params, 'showTargets');
   gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
     .onChange(v => { orbit.enabled = v; });
@@ -308,7 +339,7 @@ renderer.setAnimationLoop(() => {
     spiderRoot.position.addScaledVector(_moveDir, speed * dt);
 
     // gait più frenetico in sprint (mantiene stepDuration < threshold/speed)
-    gait.params.stepDuration = sprinting ? 0.15 : 0.25;
+    gait.params.stepDuration = sprinting ? gait.params.stepDurationSprint : gait.params.stepDurationWalk;
 
     wrapWorld();
 

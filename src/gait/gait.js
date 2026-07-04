@@ -10,7 +10,9 @@ export class GaitController {
     this.body = body;
     this.params = {
       stepThreshold: 0.35, // distanza piede-home oltre cui scatta il passo
-      stepDuration: 0.25,   // durata del passo in secondi
+      stepDuration: 0.25,       // valore attivo (pilotato da main.js)
+      stepDurationWalk: 0.25,
+      stepDurationSprint: 0.15,
       stepHeight: 0.25,    // altezza dell'arco
       leadFactor: 0.35,    // anticipo nella direzione del movimento
       maxLead: 0.5,        // clamp del lead (unità world)
