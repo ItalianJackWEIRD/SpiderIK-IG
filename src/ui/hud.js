@@ -8,7 +8,8 @@ import { playerState } from '../game/state.js';
  *   (the agreed single contact point with Task A); recolors when exhausted
  * - game-over screen: dark overlay + Restart (location.reload() for now)
  *
- * Exports: initHUD(), updateHUD(timer, score), showGameOver(finalScore)
+ * Exports: initHUD(), updateHUD(timer, score), showGameOver(finalScore),
+ *          popTimerDelta(seconds) — floating +N/-N next to the timer on pickup
  */
 
 const COLORS = {
@@ -19,10 +20,12 @@ const COLORS = {
   glow: 'rgba(102, 204, 255, 0.75)',
 };
 
+let timerBox = null;
 let timerEl = null;
 let scoreNumEl = null;
 let staminaFill = null;
 let overEl = null;
+let deltaPopupCount = 0; // stacking offset per popup +N/-N attivo
 
 /** small glowing circle, mirrors the in-game orbs (avoids any logo-like glyph) */
 function orbDot(size, parent) {
@@ -44,12 +47,14 @@ function el(tag, css, parent = document.body) {
 export function initHUD() {
   const font = "'Segoe UI', system-ui, sans-serif";
 
-  timerEl = el('div', `
+  timerBox = el('div', `
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-    z-index: 10; font: 700 44px ${font}; color: ${COLORS.text};
-    text-shadow: 0 0 14px ${COLORS.glow};
-    user-select: none; pointer-events: none;
+    z-index: 10; user-select: none; pointer-events: none;
   `);
+  timerEl = el('div', `
+    font: 700 44px ${font}; color: ${COLORS.text};
+    text-shadow: 0 0 14px ${COLORS.glow};
+  `, timerBox);
 
   const scoreBox = el('div', `
     position: fixed; top: 18px; left: 18px; z-index: 10;
@@ -85,6 +90,38 @@ export function updateHUD(timer, score) {
   staminaFill.style.width = `${playerState.stamina * 100}%`;
   staminaFill.style.backgroundColor =
     playerState.exhausted ? COLORS.staminaExhausted : COLORS.stamina;
+}
+
+/** floating +N / -N next to the timer, called once per orb pickup */
+export function popTimerDelta(seconds) {
+  if (!timerBox || !seconds) return;
+  const font = "'Segoe UI', system-ui, sans-serif";
+  const positive = seconds > 0;
+  const label = `${positive ? '+' : '\u2212'}${Math.abs(Math.round(seconds))}`;
+
+  const offsetTop = 10 + deltaPopupCount * 26;
+  deltaPopupCount++;
+
+  const popup = el('span', `
+    position: absolute; left: calc(100% + 10px); top: ${offsetTop}px;
+    font: 700 22px ${font};
+    color: ${positive ? COLORS.stamina : COLORS.timerLow};
+    text-shadow: 0 0 10px ${positive ? COLORS.glow : 'rgba(255, 77, 90, 0.6)'};
+    white-space: nowrap;
+  `, timerBox);
+  popup.textContent = label;
+
+  const anim = popup.animate(
+    [
+      { transform: 'translateY(0px)', opacity: 1 },
+      { transform: 'translateY(-24px)', opacity: 0 },
+    ],
+    { duration: 850, easing: 'ease-out' }
+  );
+  anim.onfinish = () => {
+    popup.remove();
+    deltaPopupCount = Math.max(0, deltaPopupCount - 1);
+  };
 }
 
 export function showGameOver(finalScore) {

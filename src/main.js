@@ -9,7 +9,7 @@ import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
 import { playerState } from './game/state.js';
 // TEMP HOOKUP — do not commit: official wiring happens at merge
-import { initGame, updateGame } from './game/game.js';
+import { initGame, updateGame, isGameOver } from './game/game.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -141,7 +141,7 @@ function placeSun() {
 }
 placeSun();
 
-initGame(scene); // TEMP HOOKUP — do not commit
+initGame(scene);
 
 let model = null, chains = null, gait = null, pelvis = null;
 
@@ -302,7 +302,7 @@ const _lookAt = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  if (model && gait) {
+  if (model && gait && !isGameOver()) {
     // --- input: W/S avanti-indietro, A/D ruota ---
     const move = keyboard.axis('KeyS', 'KeyW');
     const strafe = keyboard.axis('KeyA', 'KeyD');
@@ -347,7 +347,7 @@ renderer.setAnimationLoop(() => {
 
     wrapWorld();
 
-    updateGame(dt, clock.elapsedTime, spiderRoot.position); // TEMP HOOKUP — do not commit
+    updateGame(dt, clock.elapsedTime, spiderRoot.position);
 
     curveUniforms.uSpiderPos.value.set(spiderRoot.position.x, spiderRoot.position.z);
 
