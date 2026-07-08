@@ -9,7 +9,8 @@ import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
 import { playerState } from './game/state.js';
 // TEMP HOOKUP — do not commit: official wiring happens at merge
-import { initGame, updateGame, isGameOver, showPause, hidePause } from './game/game.js';
+import { initGame, updateGame, isGameOver, startGame, setDifficulty, showPause, hidePause } from './game/game.js';
+import { initMainMenu } from './ui/menu.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -17,7 +18,7 @@ const FORWARD = 1;
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
-camera.position.set(0, 3, -5);
+camera.position.set(0, 60, 0.1);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -38,6 +39,13 @@ const cam = { orbitMode: false };
 
 let paused = false;
 let camCtrl = null;
+
+let mode = 'menu';               // 'menu' | 'intro' | 'playing'
+let introT = 0;
+const INTRO_DUR = 2.2;           // durata volo cinematico (s)
+const _introFrom = new THREE.Vector3();
+const _introFromTgt = new THREE.Vector3();
+const _introTgt = new THREE.Vector3();
 
 
 // weak ambient fill; the main light is the spotlight parented to the spider
@@ -145,6 +153,22 @@ function placeSun() {
 placeSun();
 
 initGame(scene);
+
+initMainMenu({
+  groundCount: 3,
+  skyCount: 3,
+  volume: 100,
+  onDifficulty: setDifficulty,
+  onGround: applyGround,
+  onSky: applySky,
+  onPlay: () => {
+    mode = 'intro';
+    introT = 0;
+    // posa di partenza = dov'è ora la camera (alta)
+    _introFrom.copy(camera.position);
+    _introFromTgt.set(0, 2, 0); // guardava l'orizzonte
+  },
+});
 
 let model = null, chains = null, gait = null, pelvis = null;
 
@@ -305,8 +329,41 @@ const _lookAt = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  if (paused) { renderer.render(scene, camera); return; } // congela ma continua a disegnare
+  // pausa: congela ma continua a disegnare
+  if (paused) { renderer.render(scene, camera); return; }
 
+  // orb bobbing gira sempre (anche nel menu/intro): serve spiderRoot valido
+  if (model) updateGame(dt, clock.elapsedTime, spiderRoot.position);
+
+  // --- MENU: scena ferma, camera alta immobile ---
+  if (mode === 'menu') {
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // --- INTRO: volo cinematico dalla posa alta alla follow-cam ---
+  if (mode === 'intro') {
+    startGame(); // avvia timer+musica una volta sola (guardia interna)
+    introT = Math.min(introT + dt / INTRO_DUR, 1);
+    const e = introT * introT * (3 - 2 * introT); // smoothstep
+
+    // posa di gioco target (stessa formula della follow-cam)
+    _introTgt.set(0, 0, -FORWARD * params.camDistance)
+      .applyQuaternion(spiderRoot.quaternion)
+      .add(spiderRoot.position);
+    _introTgt.y += params.camHeight;
+    _lookAt.copy(spiderRoot.position); _lookAt.y += 0.8;
+
+    camera.position.lerpVectors(_introFrom, _introTgt, e);
+    _introFromTgt.lerp(_lookAt, e); // interpola anche il punto guardato
+    camera.lookAt(_introFromTgt);
+
+    if (introT >= 1) mode = 'playing'; // sblocca input
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // --- PLAYING ---
   if (model && gait && !isGameOver()) {
     // --- input: W/S avanti-indietro, A/D ruota ---
     const move = keyboard.axis('KeyS', 'KeyW');
