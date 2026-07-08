@@ -2,6 +2,7 @@ import { OrbManager } from './orbs.js';
 import { GameTimer } from './timer.js';
 import { initHUD, updateHUD, showGameOver, popTimerDelta } from '../ui/hud.js';
 import { initAudio, playMusic, playSfx } from './audio.js';
+import { playerState } from './state.js';
 
 const DIFFICULTY_SECONDS = { easy: 63, normal: 48, hard: 33 };
 let startSeconds = DIFFICULTY_SECONDS.normal; // default
@@ -56,6 +57,7 @@ export function updateGame(dt, t, spiderPos) {
     timer.addTime(e.seconds);
     playSfx(e.type === 'risk' ? (e.good ? 'risk_good' : 'risk_bad') : e.type);
     popTimerDelta(e.seconds);
+    if (e.type === 'bonus') playerState.refillStamina = true;
   }
 
   timer.update(dt);

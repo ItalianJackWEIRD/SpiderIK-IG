@@ -52,7 +52,7 @@ const _introTgt = new THREE.Vector3();
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
 // --- terreno: 3 set di texture switchabili (base dei livelli) ---
-const groundParams = { repeatPeriod: 8, set: 1 };
+const groundParams = { repeatPeriod: 20, set: 1 };
 const GROUND_SIZE = 120;
 
 const groundTexLoader = new THREE.TextureLoader();
@@ -109,11 +109,13 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// --- skybox: 3 panorami switchabili ---
 const SKY_PATHS = [
-  'textures/skybox/galaxy1Stars.jpg',   // ← adatta ai nomi/cartella reali
+  'textures/skybox/galaxy2Light.jpg',
+  'textures/skybox/galaxy3.jpg',
+  'textures/skybox/galaxy1Stars.jpg',
   'textures/skybox/galaxy2.jpg',
   'textures/skybox/galaxy1.jpg',
+  'textures/skybox/galaxy4.jpg',
 ];
 const sky = { set: 1, tilt: 2.56, yaw: 2.11 };
 const skyCache = new Map();
@@ -156,7 +158,7 @@ initGame(scene);
 
 initMainMenu({
   groundCount: 3,
-  skyCount: 3,
+  skyCount: SKY_PATHS.length,
   volume: 100,
   onDifficulty: setDifficulty,
   onGround: applyGround,
@@ -388,6 +390,14 @@ renderer.setAnimationLoop(() => {
     } else {
       stamina.value = Math.min(1, stamina.value + dt / stamina.regenTime);
       if (stamina.exhausted && stamina.value > 0.25) stamina.exhausted = false;
+    }
+
+    // bonus orb: refill immediato della stamina
+    if (playerState.refillStamina) {
+      stamina.value = 1;
+      stamina.exhausted = false;
+      stamina.cdLeft = 0;
+      playerState.refillStamina = false; // consuma il segnale
     }
 
     playerState.stamina = stamina.value;

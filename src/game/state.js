@@ -3,4 +3,5 @@ export const playerState = {
   stamina: 1,      // 0..1
   sprinting: false,
   exhausted: false, // stamina a zero: sprint bloccato finché non risale
+  refillStamina : false,
 };
