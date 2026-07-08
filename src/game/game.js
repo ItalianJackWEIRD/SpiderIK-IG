@@ -1,6 +1,7 @@
 import { OrbManager } from './orbs.js';
 import { GameTimer } from './timer.js';
 import { initHUD, updateHUD, showGameOver, popTimerDelta } from '../ui/hud.js';
+export { showPause, hidePause } from '../ui/hud.js';
 import { initAudio, playSfx } from './audio.js';
 
 const START_SECONDS = 30;

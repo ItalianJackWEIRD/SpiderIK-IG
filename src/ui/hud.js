@@ -153,3 +153,55 @@ export function showGameOver(finalScore) {
   btn.textContent = 'Restart';
   btn.onclick = () => location.reload(); // full reset for now
 }
+
+let pauseEl = null;
+
+/** velo nero + "PAUSE" + riquadro comandi (course requirement: controls list) */
+export function showPause() {
+  if (pauseEl) return;
+  const font = "'Segoe UI', system-ui, sans-serif";
+
+  pauseEl = el('div', `
+    position: fixed; inset: 0; z-index: 18;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(4, 6, 14, 0.72);
+  `);
+  el('div', `
+    font: 800 72px ${font}; color: ${COLORS.text};
+    text-shadow: 0 0 22px ${COLORS.glow}; letter-spacing: 4px;
+  `, pauseEl).textContent = 'PAUSE';
+
+  // riquadro comandi in alto a destra
+  const box = el('div', `
+    position: absolute; top: 22px; right: 22px;
+    padding: 16px 20px; border-radius: 10px;
+    background: rgba(10, 14, 26, 0.85);
+    border: 1px solid rgba(127, 212, 255, 0.25);
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+    font: 500 15px ${font}; color: ${COLORS.text}; line-height: 1.9;
+  `, pauseEl);
+  const rows = [
+    ['W / S', 'Move forward / back'],
+    ['A / D', 'Strafe left / right'],
+    ['Q / E', 'Turn left / right'],
+    ['Shift', 'Sprint (uses stamina)'],
+    ['Mouse', 'Orbit camera'],
+    ['Esc', 'Resume'],
+    ['Mouse / C', 'Orbit camera / toggle view'],
+  ];
+  el('div', `
+    font: 700 16px ${font}; margin-bottom: 8px;
+    color: ${COLORS.stamina}; letter-spacing: 1px;
+  `, box).textContent = 'CONTROLS';
+  for (const [key, desc] of rows) {
+    const row = el('div', 'display: flex; gap: 14px; align-items: baseline;', box);
+    el('span', `
+      min-width: 62px; font-weight: 700; color: ${COLORS.stamina};
+    `, row).textContent = key;
+    el('span', 'opacity: 0.9;', row).textContent = desc;
+  }
+}
+
+export function hidePause() {
+  if (pauseEl) { pauseEl.remove(); pauseEl = null; }
+}

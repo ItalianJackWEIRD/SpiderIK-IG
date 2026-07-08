@@ -9,7 +9,7 @@ import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
 import { playerState } from './game/state.js';
 // TEMP HOOKUP — do not commit: official wiring happens at merge
-import { initGame, updateGame, isGameOver } from './game/game.js';
+import { initGame, updateGame, isGameOver, showPause, hidePause } from './game/game.js';
 
 // se il ragno cammina all'indietro rispetto al muso, metti -1
 const FORWARD = 1;
@@ -35,6 +35,9 @@ orbit.enabled = false; // si parte in follow
 
 // modalità camera: true = orbita col mouse, false = follow
 const cam = { orbitMode: false };
+
+let paused = false;
+let camCtrl = null;
 
 
 // weak ambient fill; the main light is the spotlight parented to the spider
@@ -286,7 +289,7 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   w.add(sky, 'set', { 'Sky 1': 1, 'Sky 2': 2, 'Sky 3': 3 })
     .name('skybox').onChange(applySky);
   gui.add(params, 'showTargets');
-  gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
+  camCtrl = gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
     .onChange(v => { orbit.enabled = v; });
 }, undefined, (err) => console.error('Errore FBX:', err));
 
@@ -301,6 +304,8 @@ const _lookAt = new THREE.Vector3();
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (paused) { renderer.render(scene, camera); return; } // congela ma continua a disegnare
 
   if (model && gait && !isGameOver()) {
     // --- input: W/S avanti-indietro, A/D ruota ---
@@ -396,4 +401,20 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+});
+
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyC') {
+    if (paused || isGameOver()) return;   // in pausa/game over il toggle è inerte
+    cam.orbitMode = !cam.orbitMode;
+    orbit.enabled = cam.orbitMode;
+    camCtrl?.updateDisplay();             // tiene la checkbox GUI allineata
+    return;
+  }
+  if (e.code === 'Escape') {
+    if (isGameOver()) return;
+    paused = !paused;
+    if (paused) { showPause(); orbit.enabled = false; }
+    else { hidePause(); orbit.enabled = cam.orbitMode; }
+  }
 });
