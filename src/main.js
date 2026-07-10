@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import GUI from 'lil-gui';
+// import GUI from 'lil-gui';
 import { solveLeg } from './ik/fabrik.js';
 import { GaitController } from './gait/gait.js';
 import { PelvisController } from './gait/pelvis.js';
@@ -275,6 +275,7 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
     targetMeshes.push(m);
   }
 
+   /* --- DEBUG GUI (lil-gui) — disabilitata per la submission, lasciata per riferimento ---
   const gui = new GUI();
   const g = gui.addFolder('Gait');
   g.add(gait.params, 'stepThreshold', 0.1, 0.8, 0.01);
@@ -317,6 +318,7 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   gui.add(params, 'showTargets');
   camCtrl = gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
     .onChange(v => { orbit.enabled = v; });
+  */
 }, undefined, (err) => console.error('Errore FBX:', err));
 
 const clock = new THREE.Clock();
