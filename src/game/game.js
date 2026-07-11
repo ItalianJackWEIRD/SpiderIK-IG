@@ -13,31 +13,31 @@ let score = 0;
 let gameOver = false;
 let started = false;
 
-/** prepara tutto ma NON avvia il timer né la musica (menu attivo) */
+/** set up everything but do NOT start the timer or music (menu is active) */
 export function initGame(scene) {
   orbs = new OrbManager(scene, 6);
   timer = new GameTimer();
-  timer.start(startSeconds);   // riempie remaining...
-  timer.running = false;        // ...ma resta FERMO finché non parte il gioco
+  timer.start(startSeconds);   // fills remaining...
+  timer.running = false;        // ...but stays STOPPED until the game starts
   score = 0;
   gameOver = false;
   started = false;
   initHUD();
   initAudio();
-  updateHUD(timer, score);      // mostra "30" fermo nel menu
+  updateHUD(timer, score);      // show "30" frozen in the menu
   timer.onDeath(() => {
     gameOver = true;
     showGameOver(score);
   });
 }
 
-/** imposta i secondi iniziali dalla difficoltà del menu; re-arma il timer fermo */
+/** set the initial seconds from the menu difficulty; re-arm the stopped timer */
 export function setDifficulty(key) {
   startSeconds = DIFFICULTY_SECONDS[key] ?? DIFFICULTY_SECONDS.normal;
   if (timer) { timer.start(startSeconds); timer.running = false; updateHUD(timer, score); }
 }
 
-/** chiamata dal Play: avvia timer e musica */
+/** called from Play: start timer and music */
 export function startGame() {
   if (started) return;
   started = true;
@@ -48,9 +48,9 @@ export function startGame() {
 export function updateGame(dt, t, spiderPos) {
   if (!orbs || gameOver) return;
 
-  orbs.update(t, spiderPos); // bobbing/spin: ok anche prima dello start
+  orbs.update(t, spiderPos); // bobbing/spin: ok even before start
 
-  if (!started) return;      // niente pickup/timer finché non premi Play
+  if (!started) return;      // no pickup/timer until Play is pressed
 
   for (const e of orbs.checkPickup(spiderPos)) {
     score++;

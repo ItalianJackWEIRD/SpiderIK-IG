@@ -25,7 +25,7 @@ let timerEl = null;
 let scoreNumEl = null;
 let staminaFill = null;
 let overEl = null;
-let deltaPopupCount = 0; // stacking offset per popup +N/-N attivo
+let deltaPopupCount = 0; // stacking offset for active +N/-N popup
 
 /** small glowing circle, mirrors the in-game orbs (avoids any logo-like glyph) */
 function orbDot(size, parent) {
@@ -156,7 +156,7 @@ export function showGameOver(finalScore) {
 
 let pauseEl = null;
 
-/** velo nero + "PAUSE" + riquadro comandi (course requirement: controls list) */
+/** dark overlay + "PAUSE" + controls panel (course requirement: controls list) */
 export function showPause() {
   if (pauseEl) return;
   const font = "'Segoe UI', system-ui, sans-serif";
@@ -171,7 +171,7 @@ export function showPause() {
     text-shadow: 0 0 22px ${COLORS.glow}; letter-spacing: 4px;
   `, pauseEl).textContent = 'PAUSE';
 
-  // riquadro comandi in alto a destra
+  // controls panel in the top-right corner
   const box = el('div', `
     position: absolute; top: 22px; right: 22px;
     padding: 16px 20px; border-radius: 10px;

@@ -1,21 +1,21 @@
 import * as THREE from 'three';
 
-// Uniforms CONDIVISI tra tutti i materiali curvati: un solo update per frame
+// Uniforms SHARED across all curved materials: a single update per frame
 export const curveUniforms = {
   uSpiderPos: { value: new THREE.Vector2(0, 0) },
-  uCurveR: { value: 127 },     // raggio di curvatura: piccolo = luna piccola
+  uCurveR: { value: 127 },     // curvature radius: small = small moon
   uHeightMap: { value: null },
-  uHeightAmp: { value: 1.8 }, // altezza dei rilievi all'orizzonte
-  uGateStart: { value: 14 },  // da qui i rilievi iniziano a crescere...
-  uGateEnd: { value: 26 },    // ...e qui sono al massimo (zona di gioco: piatta)
+  uHeightAmp: { value: 1.8 }, // height of the horizon relief
+  uGateStart: { value: 14 },  // relief starts growing from here...
+  uGateEnd: { value: 26 },    // ...and reaches full height here (play area: flat)
 };
 
 /**
- * Inietta la curvatura "tiny planet" in un materiale standard.
- * I vertici vengono abbassati di dist²/R rispetto al ragno (solo visivo:
- * la logica di gioco resta piatta). Con withHeight, oltre il gate viene
- * sommato un rilievo campionato dalla height map, con periodo 40 = la
- * cella del wrap, così l'orizzonte è identico prima e dopo il teletrasporto.
+ * Injects the "tiny planet" curvature into a standard material.
+ * Vertices are lowered by dist²/R relative to the spider (visual only:
+ * game logic stays flat). With withHeight, beyond the gate a relief
+ * sampled from the height map is added, with period 40 = the wrap cell,
+ * so the horizon is identical before and after the teleport.
  */
 export function makeCurved(material, { withHeight = false } = {}) {
   material.onBeforeCompile = (shader) => {
@@ -43,7 +43,7 @@ export function makeCurved(material, { withHeight = false } = {}) {
         gl_Position = projectionMatrix * mvPosition;
       `);
   };
-  // chiave di cache esplicita: evita che varianti diverse condividano lo shader
+  // explicit cache key: prevents different variants from sharing the shader
   material.customProgramCacheKey = () => 'curved' + (withHeight ? '+h' : '');
   material.needsUpdate = true;
 }

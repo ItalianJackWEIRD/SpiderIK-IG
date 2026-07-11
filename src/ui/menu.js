@@ -43,7 +43,7 @@ export function initMainMenu(opts) {
   `;
   root.appendChild(title);
 
-  // 4 righe: Play, Volume, Ground, Skybox
+  // 4 rows: Play, Volume, Ground, Skybox
   const rows = [
     { key: 'play', label: 'PLAY' },
     { key: 'diff', label: 'Difficulty' },
