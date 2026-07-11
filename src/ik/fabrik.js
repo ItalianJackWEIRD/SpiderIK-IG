@@ -2,13 +2,13 @@ import * as THREE from 'three';
 
 /**
  * FABRIK (Forward And Backward Reaching IK) — Aristidou & Lasenby 2011
- * Muta `points` in place. `lengths[i]` = distanza tra points[i] e points[i+1].
+ * Mutates `points` in place. `lengths[i]` = distance between points[i] and points[i+1].
  */
 export function solveFABRIK(points, lengths, target, iterations = 10, tolerance = 0.001) {
   const root = points[0].clone();
   const totalLen = lengths.reduce((a, b) => a + b, 0);
 
-  // Target irraggiungibile: catena tesa verso il target
+  // Target unreachable: stretch the chain toward the target
   if (root.distanceTo(target) > totalLen) {
     for (let i = 0; i < points.length - 1; i++) {
       const dir = target.clone().sub(points[i]).normalize();
@@ -18,13 +18,13 @@ export function solveFABRIK(points, lengths, target, iterations = 10, tolerance 
   }
 
   for (let it = 0; it < iterations; it++) {
-    // Backward pass: dall'end effector alla radice
+    // Backward pass: from the end effector to the root
     points[points.length - 1].copy(target);
     for (let i = points.length - 2; i >= 0; i--) {
       const dir = points[i].clone().sub(points[i + 1]).normalize();
       points[i].copy(points[i + 1]).addScaledVector(dir, lengths[i]);
     }
-    // Forward pass: dalla radice all'end effector
+    // Forward pass: from the root to the end effector
     points[0].copy(root);
     for (let i = 1; i < points.length; i++) {
       const dir = points[i].clone().sub(points[i - 1]).normalize();
@@ -35,8 +35,8 @@ export function solveFABRIK(points, lengths, target, iterations = 10, tolerance 
 }
 
 /**
- * Applica al bone la rotazione (in world space, riconvertita in local)
- * che porta la direzione verso il child sulla direzione risolta dal FABRIK.
+ * Applies a rotation to the bone (in world space, converted back to local)
+ * that aligns the direction toward the child with the FABRIK-solved direction.
  */
 export function alignBoneToward(bone, child, solvedChildPos) {
   const bonePos = bone.getWorldPosition(new THREE.Vector3());
@@ -52,9 +52,9 @@ export function alignBoneToward(bone, child, solvedChildPos) {
 }
 
 /**
- * Vincolo di pole vector: ruota il giunto intermedio attorno all'asse
- * root→end così che il "ginocchio" pieghi sempre verso il pole.
- * Ruotando attorno a quell'asse le lunghezze dei segmenti restano intatte.
+ * Pole vector constraint: rotates the middle joint around the root→end
+ * axis so that the "knee" always bends toward the pole.
+ * Rotating around that axis keeps segment lengths intact.
  */
 export function applyPoleConstraint(points, poleWorld) {
   const [p0, p1, p2] = points;
@@ -64,11 +64,11 @@ export function applyPoleConstraint(points, poleWorld) {
   if (axisLen < 1e-6) return;
   axis.divideScalar(axisLen);
 
-  // proiezione del ginocchio sull'asse root→end
+  // projection of the knee onto the root→end axis
   const proj = p0.clone().addScaledVector(axis, p1.clone().sub(p0).dot(axis));
   const bendLen = p1.distanceTo(proj);
 
-  // direzione desiderata: verso il pole, ortogonale all'asse
+  // desired direction: toward the pole, orthogonal to the axis
   const toPole = poleWorld.clone().sub(proj);
   toPole.addScaledVector(axis, -toPole.dot(axis));
   if (toPole.lengthSq() < 1e-8) return;
@@ -79,14 +79,14 @@ export function applyPoleConstraint(points, poleWorld) {
 
 const _up = new THREE.Vector3(0, 1, 0);
 
-/** Risolve una catena [thigh, calf, foot] verso un target world-space. */
+/** Solves a [thigh, calf, foot] chain toward a world-space target. */
 export function solveLeg(chain, targetWorld, poleUp = 1.0) {
   const p = chain.map(b => b.getWorldPosition(new THREE.Vector3()));
   const lengths = [p[0].distanceTo(p[1]), p[1].distanceTo(p[2])];
 
   solveFABRIK(p, lengths, targetWorld);
 
-  // pole: sopra il punto medio spalla-target → il ginocchio piega sempre in su
+  // pole: above the midpoint of shoulder-target → the knee always bends upward
   const pole = p[0].clone().add(targetWorld).multiplyScalar(0.5).addScaledVector(_up, poleUp);
   applyPoleConstraint(p, pole);
 
