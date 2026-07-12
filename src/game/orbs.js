@@ -2,22 +2,13 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeCurved } from '../world/curvature.js';
 
-const WRAP = 40; // toroidal cell side, must match main.js
+const WRAP = 40;
 const HALF = WRAP / 2;
 
-/** Shortest signed offset on the torus along one axis. */
 function wrapDelta(d) {
   return ((d + HALF) % WRAP + WRAP) % WRAP - HALF;
 }
 
-/**
- * Orb types.
- *   model:   public/models/orbs/<model>.fbx
- *   texture: public/textures/orbs/<model>.jpg
- *   seconds: number, or [good, bad] for the 50:50 risk orb
- *   weight:  spawn probability (renormalized among non-capped types)
- *   max:     hard cap of simultaneous orbs of this type
- */
 export const ORB_TYPES = {
   normal: { seconds: 5, tint: 0xbfdfff, emissive: 0x66ccff, weight: 0.70, max: 6 },
   bonus: { seconds: 8, tint: 0xbbf7d0, emissive: 0x4afe96, weight: 0.10, max: 1 },
@@ -28,18 +19,17 @@ export class OrbManager {
   constructor(scene, count = 6) {
     this.params = {
       pickupRadius: 1.2,
-      minSpawnDist: 6,   // from the spider
-      minOrbDist: 7,     // between orbs (toroidal distance)
+      minSpawnDist: 6,
+      minOrbDist: 7,
       baseHeight: 0.5,
       bobAmp: 0.15,
       bobSpeed: 2,
-      spinSpeed: 0.8,    // showcase spin (JS animation, not imported)
-      size: 0.55,        // model target size in world units
+      spinSpeed: 0.8,
+      size: 0.55,
     };
 
     this.placeholderGeo = new THREE.SphereGeometry(0.25, 24, 16);
 
-    // --- shared texture set, loaded once ---
     const texLoader = new THREE.TextureLoader();
     const T = (p, srgb = false) => {
       const t = texLoader.load(p);
@@ -53,15 +43,14 @@ export class OrbManager {
       emissiveMap: T('textures/orbs/orb_emissive.png', true),
       aoMap: T('textures/orbs/orb_ao.png'),
     };
-    maps.aoMap.channel = 0; // single UV set, like the spider
+    maps.aoMap.channel = 0;
 
-    // --- one material per type: same maps, different tint & glow ---
     this.assets = {};
     for (const [type, cfg] of Object.entries(ORB_TYPES)) {
       const material = new THREE.MeshPhongMaterial({
         ...maps,
-        color: cfg.tint,          // multiplies the baseColor: the "veil"
-        emissive: cfg.emissive,   // multiplies the emissiveMap: tints the LED
+        color: cfg.tint,
+        emissive: cfg.emissive,
         emissiveIntensity: 1.4,
         shininess: 45,
       });
@@ -69,7 +58,6 @@ export class OrbManager {
       this.assets[type] = { material };
     }
 
-    // --- ONE shared FBX for all types ---
     this.templateShared = null;
     new FBXLoader().load('models/orbs/orb.fbx', (fbx) => {
       let box = new THREE.Box3().setFromObject(fbx);
@@ -80,10 +68,9 @@ export class OrbManager {
       fbx.position.sub(box.getCenter(new THREE.Vector3()));
 
       this.templateShared = fbx;
-      for (const orb of this.orbs) this.setVisual(orb); // upgrade placeholders
+      for (const orb of this.orbs) this.setVisual(orb);
     }, undefined, () => console.warn('orb.fbx missing (placeholder spheres in use)'));
 
-    // --- the orbs themselves ---
     this.orbs = [];
     for (let i = 0; i < count; i++) {
       const group = new THREE.Group();
@@ -111,7 +98,6 @@ export class OrbManager {
     }
   }
 
-  /** pick a type honoring per-type caps, weights renormalized */
   chooseType(exclude) {
     const counts = {};
     for (const o of this.orbs) {
@@ -129,7 +115,6 @@ export class OrbManager {
     return 'normal';
   }
 
-  /** random logical position far from the spider AND from other orbs */
   respawn(orb, spiderPos) {
     orb.type = this.chooseType(orb);
     this.setVisual(orb);
@@ -155,7 +140,6 @@ export class OrbManager {
       }
       if (ok) return;
     }
-    // 30 failed tries: keep the last candidate (never hard-locks)
   }
 
   update(t, spiderPos) {
@@ -173,10 +157,7 @@ export class OrbManager {
     }
   }
 
-  /**
-   * Pickup on the VISUAL (wrap-aware) position, xz only.
-   * @returns {Array<{type: string, seconds: number, good: boolean}>}
-   */
+
   checkPickup(spiderPos, radius = this.params.pickupRadius) {
     const events = [];
     for (const orb of this.orbs) {
@@ -186,7 +167,7 @@ export class OrbManager {
 
       const cfg = ORB_TYPES[orb.type];
       let seconds, good = true;
-      if (Array.isArray(cfg.seconds)) {          // risk: 50:50
+      if (Array.isArray(cfg.seconds)) {
         good = Math.random() < 0.5;
         seconds = good ? cfg.seconds[0] : cfg.seconds[1];
       } else {

@@ -5,39 +5,37 @@ import { initAudio, playMusic, playSfx } from './audio.js';
 import { playerState } from './state.js';
 
 const DIFFICULTY_SECONDS = { easy: 63, normal: 48, hard: 33 };
-let startSeconds = DIFFICULTY_SECONDS.normal; // default
-
+let startSeconds = DIFFICULTY_SECONDS.normal; 
 let orbs = null;
 let timer = null;
 let score = 0;
 let gameOver = false;
 let started = false;
 
-/** set up everything but do NOT start the timer or music (menu is active) */
+
 export function initGame(scene) {
   orbs = new OrbManager(scene, 6);
   timer = new GameTimer();
-  timer.start(startSeconds);   // fills remaining...
-  timer.running = false;        // ...but stays STOPPED until the game starts
+  timer.start(startSeconds);
+  timer.running = false;
   score = 0;
   gameOver = false;
   started = false;
   initHUD();
   initAudio();
-  updateHUD(timer, score);      // show "30" frozen in the menu
+  updateHUD(timer, score);
   timer.onDeath(() => {
     gameOver = true;
     showGameOver(score);
   });
 }
 
-/** set the initial seconds from the menu difficulty; re-arm the stopped timer */
 export function setDifficulty(key) {
   startSeconds = DIFFICULTY_SECONDS[key] ?? DIFFICULTY_SECONDS.normal;
   if (timer) { timer.start(startSeconds); timer.running = false; updateHUD(timer, score); }
 }
 
-/** called from Play: start timer and music */
+
 export function startGame() {
   if (started) return;
   started = true;
@@ -48,9 +46,9 @@ export function startGame() {
 export function updateGame(dt, t, spiderPos) {
   if (!orbs || gameOver) return;
 
-  orbs.update(t, spiderPos); // bobbing/spin: ok even before start
+  orbs.update(t, spiderPos);
 
-  if (!started) return;      // no pickup/timer until Play is pressed
+  if (!started) return;
 
   for (const e of orbs.checkPickup(spiderPos)) {
     score++;

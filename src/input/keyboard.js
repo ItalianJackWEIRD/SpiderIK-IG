@@ -6,7 +6,6 @@ export class Keyboard {
     addEventListener('blur', () => this.keys.clear());
   }
   isDown(code) { return this.keys.has(code); }
-  /** returns -1, 0 or +1 */
   axis(negCode, posCode) {
     return (this.isDown(posCode) ? 1 : 0) - (this.isDown(negCode) ? 1 : 0);
   }

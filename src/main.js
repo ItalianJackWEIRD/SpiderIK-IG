@@ -8,12 +8,12 @@ import { PelvisController } from './gait/pelvis.js';
 import { Keyboard } from './input/keyboard.js';
 import { makeCurved, curveUniforms } from './world/curvature.js';
 import { playerState } from './game/state.js';
-// TEMP HOOKUP — do not commit: official wiring happens at merge
 import { initGame, updateGame, isGameOver, startGame, setDifficulty, showPause, hidePause } from './game/game.js';
 import { initMainMenu } from './ui/menu.js';
 
-// if the spider walks backwards relative to its face, set to -1
 const FORWARD = 1;
+
+const DEBUG_GUI = false;
 
 const scene = new THREE.Scene();
 
@@ -25,16 +25,14 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-// --- orbit camera (mouse), alternative to the follow cam ---
 const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.enableDamping = true;
 orbit.enablePan = false;
 orbit.minDistance = 2;
 orbit.maxDistance = 10;
 orbit.maxPolarAngle = Math.PI / 2 - 0.05;
-orbit.enabled = false; // start in follow mode
+orbit.enabled = false;
 
-// camera mode: true = orbit with mouse, false = follow
 const cam = { orbitMode: false };
 
 let paused = false;
@@ -42,16 +40,14 @@ let camCtrl = null;
 
 let mode = 'menu';               // 'menu' | 'intro' | 'playing'
 let introT = 0;
-const INTRO_DUR = 2.2;           // cinematic fly-in duration (s)
+const INTRO_DUR = 2.2;
 const _introFrom = new THREE.Vector3();
 const _introFromTgt = new THREE.Vector3();
 const _introTgt = new THREE.Vector3();
 
 
-// weak ambient fill; the main light is the spotlight parented to the spider
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-// --- ground: 3 switchable texture sets (level base) ---
 const groundParams = { repeatPeriod: 20, set: 1 };
 const GROUND_SIZE = 120;
 
@@ -98,7 +94,7 @@ function applyGround(i) {
   groundMat.specularMap = s.specular;
   curveUniforms.uHeightMap.value = s.height;
   setGroundRepeat(groundParams.repeatPeriod);
-  groundMat.needsUpdate = true; // material acquired maps: recompile shader
+  groundMat.needsUpdate = true;
 }
 applyGround(1);
 
@@ -137,11 +133,9 @@ applySky(1);
 
 const keyboard = new Keyboard();
 
-// logical root: input and gait operate on this; the model is a child
 const spiderRoot = new THREE.Group();
 scene.add(spiderRoot);
 
-// --- sun: fixed directional light, uniform across the entire world ---
 const sun = new THREE.DirectionalLight(0xfff1dd, 8);
 scene.add(sun);
 const sunCtl = { azimuth: 4.82, elevation: 1.26 };
@@ -166,9 +160,8 @@ initMainMenu({
   onPlay: () => {
     mode = 'intro';
     introT = 0;
-    // starting pose = where the camera is now (high up)
     _introFrom.copy(camera.position);
-    _introFromTgt.set(0, 2, 0); // was looking at the horizon
+    _introFromTgt.set(0, 2, 0);
   },
 });
 
@@ -187,14 +180,14 @@ const params = {
 
 const stamina = {
   value: 1,
-  drainTime: 1.8,  // seconds of continuous sprint
-  regenTime: 6,    // seconds for full recharge
-  cooldown: 1,     // pause after full depletion
+  drainTime: 1.8,
+  regenTime: 6,
+  cooldown: 1,
   cdLeft: 0,
   exhausted: false,
 };
 
-const WRAP = 40; // toroidal cell side (the "perimeter" of the moon)
+const WRAP = 40; // toroidal cell side
 
 function shiftWorld(dx, dz) {
   spiderRoot.position.x += dx; spiderRoot.position.z += dz;
@@ -229,7 +222,6 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
   const box = new THREE.Box3().setFromObject(fbx);
   fbx.position.y -= box.min.y;
 
-  // --- spider materials from the 4 Unreal-exported maps ---
   const texLoader = new THREE.TextureLoader();
   const colorMap = texLoader.load('textures/spider/texture.png');
   colorMap.colorSpace = THREE.SRGBColorSpace; // only the color map is sRGB
@@ -275,48 +267,50 @@ new FBXLoader().load('models/spider.fbx', (fbx) => {
     targetMeshes.push(m);
   }
 
-  const gui = new GUI();
-  const g = gui.addFolder('Gait');
-  g.add(gait.params, 'stepThreshold', 0.1, 0.8, 0.01);
-  g.add(gait.params, 'stepDurationWalk', 0.08, 0.6, 0.01);
-  g.add(gait.params, 'stepDurationSprint', 0.08, 0.4, 0.01);
-  g.add(gait.params, 'stepHeight', 0.05, 0.5, 0.01);
-  g.add(gait.params, 'leadFactor', 0, 0.5, 0.01);
-  const pv = gui.addFolder('Pelvis');
-  pv.add(pelvis.params, 'stiffness', 20, 300, 1);
-  pv.add(pelvis.params, 'damping', 2, 30, 0.5);
-  pv.add(pelvis.params, 'bobAmp', 0, 0.15, 0.005);
-  pv.add(pelvis.params, 'swayAmp', 0, 0.15, 0.005);
-  pv.add(pelvis.params, 'freq', 2, 15, 0.5);
-  pv.add(pelvis.params, 'liftAmp', 0, 0.5, 0.005);
-  pv.add(pelvis.params, 'ramp', 1, 10, 0.1);
-  pv.add(pelvis.params, 'idleAmp', 0, 0.06, 0.002);
-  pv.add(pelvis.params, 'idleFreq', 0.5, 4, 0.1);
-  const lt = gui.addFolder('Light');
-  lt.add(sun, 'intensity', 0, 8, 0.1).name('sun intensity');
-  lt.add(sunCtl, 'azimuth', 0, Math.PI * 2, 0.01).name('sun azimuth').onChange(placeSun);
-  lt.add(sunCtl, 'elevation', 0.1, Math.PI / 2, 0.01).name('sun elevation').onChange(placeSun);
-  lt.add(spiderMat.normalScale, 'y', { 'DirectX (-1)': -1, 'OpenGL (+1)': 1 }).name('normalMapY');
-  const mv = gui.addFolder('Movement');
-  mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
-  mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
-  mv.add(params, 'tiltAmount', 0, 0.15, 0.005);
-  mv.add(params, 'sprintMult', 1.2, 2.5, 0.05);
-  mv.add(stamina, 'drainTime', 1, 8, 0.1);
-  mv.add(stamina, 'regenTime', 2, 12, 0.1);
-  const w = gui.addFolder('World');
-  w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8, 10, 20, 40]).name('texture period')
-    .onChange(setGroundRepeat);
-  w.add(groundMat, 'shininess', 0, 60, 1);
-  w.add(curveUniforms.uCurveR, 'value', 20, 200, 1).name('curve R');
-  w.add(curveUniforms.uHeightAmp, 'value', 0, 6, 0.1).name('horizon relief');
-  w.add(groundParams, 'set', { 'Ground 1': 1, 'Ground 2': 2, 'Ground 3': 3 })
-    .name('ground').onChange(applyGround);
-  w.add(sky, 'set', { 'Sky 1': 1, 'Sky 2': 2, 'Sky 3': 3 })
-    .name('skybox').onChange(applySky);
-  gui.add(params, 'showTargets');
-  camCtrl = gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
-    .onChange(v => { orbit.enabled = v; });
+  if (DEBUG_GUI) {
+    const gui = new GUI();
+    const g = gui.addFolder('Gait');
+    g.add(gait.params, 'stepThreshold', 0.1, 0.8, 0.01);
+    g.add(gait.params, 'stepDurationWalk', 0.08, 0.6, 0.01);
+    g.add(gait.params, 'stepDurationSprint', 0.08, 0.4, 0.01);
+    g.add(gait.params, 'stepHeight', 0.05, 0.5, 0.01);
+    g.add(gait.params, 'leadFactor', 0, 0.5, 0.01);
+    const pv = gui.addFolder('Pelvis');
+    pv.add(pelvis.params, 'stiffness', 20, 300, 1);
+    pv.add(pelvis.params, 'damping', 2, 30, 0.5);
+    pv.add(pelvis.params, 'bobAmp', 0, 0.15, 0.005);
+    pv.add(pelvis.params, 'swayAmp', 0, 0.15, 0.005);
+    pv.add(pelvis.params, 'freq', 2, 15, 0.5);
+    pv.add(pelvis.params, 'liftAmp', 0, 0.5, 0.005);
+    pv.add(pelvis.params, 'ramp', 1, 10, 0.1);
+    pv.add(pelvis.params, 'idleAmp', 0, 0.06, 0.002);
+    pv.add(pelvis.params, 'idleFreq', 0.5, 4, 0.1);
+    const lt = gui.addFolder('Light');
+    lt.add(sun, 'intensity', 0, 8, 0.1).name('sun intensity');
+    lt.add(sunCtl, 'azimuth', 0, Math.PI * 2, 0.01).name('sun azimuth').onChange(placeSun);
+    lt.add(sunCtl, 'elevation', 0.1, Math.PI / 2, 0.01).name('sun elevation').onChange(placeSun);
+    lt.add(spiderMat.normalScale, 'y', { 'DirectX (-1)': -1, 'OpenGL (+1)': 1 }).name('normalMapY');
+    const mv = gui.addFolder('Movement');
+    mv.add(params, 'moveSpeed', 0.5, 3, 0.1);
+    mv.add(params, 'turnSpeed', 0.5, 4, 0.1);
+    mv.add(params, 'tiltAmount', 0, 0.15, 0.005);
+    mv.add(params, 'sprintMult', 1.2, 2.5, 0.05);
+    mv.add(stamina, 'drainTime', 1, 8, 0.1);
+    mv.add(stamina, 'regenTime', 2, 12, 0.1);
+    const w = gui.addFolder('World');
+    w.add(groundParams, 'repeatPeriod', [1, 2, 4, 8, 10, 20, 40]).name('texture period')
+      .onChange(setGroundRepeat);
+    w.add(groundMat, 'shininess', 0, 60, 1);
+    w.add(curveUniforms.uCurveR, 'value', 20, 200, 1).name('curve R');
+    w.add(curveUniforms.uHeightAmp, 'value', 0, 6, 0.1).name('horizon relief');
+    w.add(groundParams, 'set', { 'Ground 1': 1, 'Ground 2': 2, 'Ground 3': 3 })
+      .name('ground').onChange(applyGround);
+    w.add(sky, 'set', { 'Sky 1': 1, 'Sky 2': 2, 'Sky 3': 3 })
+      .name('skybox').onChange(applySky);
+    gui.add(params, 'showTargets');
+    camCtrl = gui.add(cam, 'orbitMode').name('camera orbit (mouse)')
+      .onChange(v => { orbit.enabled = v; });
+  }
 }, undefined, (err) => console.error('FBX Error:', err));
 
 const clock = new THREE.Clock();
@@ -331,25 +325,20 @@ const _lookAt = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // pause: freeze but keep drawing
   if (paused) { renderer.render(scene, camera); return; }
 
-  // orb bobbing runs always (even in menu/intro): requires valid spiderRoot
   if (model) updateGame(dt, clock.elapsedTime, spiderRoot.position);
 
-  // --- MENU: static scene, high stationary camera ---
   if (mode === 'menu') {
     renderer.render(scene, camera);
     return;
   }
 
-  // --- INTRO: cinematic fly-in from the high pose to the follow-cam ---
   if (mode === 'intro') {
-    startGame(); // start timer+music only once (internal guard)
+    startGame();
     introT = Math.min(introT + dt / INTRO_DUR, 1);
     const e = introT * introT * (3 - 2 * introT); // smoothstep
 
-    // gameplay target pose (same formula as the follow-cam)
     _introTgt.set(0, 0, -FORWARD * params.camDistance)
       .applyQuaternion(spiderRoot.quaternion)
       .add(spiderRoot.position);
@@ -357,7 +346,7 @@ renderer.setAnimationLoop(() => {
     _lookAt.copy(spiderRoot.position); _lookAt.y += 0.8;
 
     camera.position.lerpVectors(_introFrom, _introTgt, e);
-    _introFromTgt.lerp(_lookAt, e); // also interpolate the look-at point
+    _introFromTgt.lerp(_lookAt, e);
     camera.lookAt(_introFromTgt);
 
     if (introT >= 1) mode = 'playing'; // unlock input
@@ -365,14 +354,14 @@ renderer.setAnimationLoop(() => {
     return;
   }
 
-  // --- PLAYING ---
+
   if (model && gait && !isGameOver()) {
-    // --- input: W/S forward-backward, A/D strafe ---
+
     const move = keyboard.axis('KeyS', 'KeyW');
     const strafe = keyboard.axis('KeyA', 'KeyD');
     const turn = keyboard.axis('KeyE', 'KeyQ');
 
-    // --- sprint with stamina ---
+
     const wantSprint = keyboard.isDown('ShiftLeft') || keyboard.isDown('ShiftRight');
     const moving = move !== 0 || strafe !== 0;
     let sprinting = wantSprint && moving && !stamina.exhausted && stamina.value > 0;
@@ -392,12 +381,12 @@ renderer.setAnimationLoop(() => {
       if (stamina.exhausted && stamina.value > 0.25) stamina.exhausted = false;
     }
 
-    // bonus orb: instant stamina refill
+
     if (playerState.refillStamina) {
       stamina.value = 1;
       stamina.exhausted = false;
       stamina.cdLeft = 0;
-      playerState.refillStamina = false; // consume the signal
+      playerState.refillStamina = false;
     }
 
     playerState.stamina = stamina.value;
@@ -406,7 +395,6 @@ renderer.setAnimationLoop(() => {
 
     const speed = params.moveSpeed * (sprinting ? params.sprintMult : 1);
 
-    // --- movement: fwd*move + right*strafe, normalized on diagonals ---
     spiderRoot.rotation.y += turn * params.turnSpeed * dt;
     _fwd.set(0, 0, FORWARD).applyQuaternion(spiderRoot.quaternion);
     _right.set(-FORWARD, 0, 0).applyQuaternion(spiderRoot.quaternion);
@@ -414,7 +402,7 @@ renderer.setAnimationLoop(() => {
     if (_moveDir.lengthSq() > 1) _moveDir.normalize();
     spiderRoot.position.addScaledVector(_moveDir, speed * dt);
 
-    // faster gait while sprinting (keeps stepDuration < threshold/speed)
+
     gait.params.stepDuration = sprinting ? gait.params.stepDurationSprint : gait.params.stepDurationWalk;
 
     wrapWorld();
@@ -423,18 +411,17 @@ renderer.setAnimationLoop(() => {
 
     curveUniforms.uSpiderPos.value.set(spiderRoot.position.x, spiderRoot.position.z);
 
-    // --- body tilt: pitch when moving forward, roll when turning ---
+
     const targetPitch = -move * params.tiltAmount * (sprinting ? 1.6 : 1);
     const targetRoll = (-turn * 0.8 - strafe * 0.9) * params.tiltAmount;
     model.rotation.x = THREE.MathUtils.damp(model.rotation.x, targetPitch, 6, dt);
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, targetRoll, 6, dt);
 
-    // --- actual root velocity ---
+
     velocity.copy(spiderRoot.position).sub(prevPos).divideScalar(Math.max(dt, 1e-4));
     velocity.y = 0;
     prevPos.copy(spiderRoot.position);
 
-    // --- pelvis sway, then gait, then IK (order matters) ---
     pelvis.update(dt, velocity.length());
     spiderRoot.updateMatrixWorld(true);
     gait.update(dt, velocity);
@@ -445,7 +432,7 @@ renderer.setAnimationLoop(() => {
       targetMeshes[i].visible = params.showTargets;
     }
 
-    // --- camera: orbit with mouse or follow ---
+
     if (cam.orbitMode) {
       orbit.target.copy(spiderRoot.position);
       orbit.target.y += 0.8;
@@ -472,10 +459,10 @@ addEventListener('resize', () => {
 
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') {
-    if (paused || isGameOver()) return;   // toggle is inert during pause/game over
+    if (paused || isGameOver()) return;
     cam.orbitMode = !cam.orbitMode;
     orbit.enabled = cam.orbitMode;
-    camCtrl?.updateDisplay();             // keep the GUI checkbox in sync
+    camCtrl?.updateDisplay();
     return;
   }
   if (e.code === 'Escape') {

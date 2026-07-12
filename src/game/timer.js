@@ -1,8 +1,3 @@
-/**
- * Countdown game timer. No three.js dependency on purpose.
- * Collecting orbs adds time (see game.js); reaching zero fires the
- * death callback exactly once.
- */
 export class GameTimer {
   constructor() {
     this._remaining = 0;
@@ -17,7 +12,6 @@ export class GameTimer {
     this.dead = false;
   }
 
-  /** register the callback fired once when the timer reaches 0 */
   onDeath(callback) {
     this._onDeath = callback;
   }
@@ -37,7 +31,7 @@ export class GameTimer {
       this._remaining = 0;
       this.dead = true;
       this.running = false;
-      if (this._onDeath) this._onDeath(); // fired exactly once
+      if (this._onDeath) this._onDeath();
     }
   }
 }

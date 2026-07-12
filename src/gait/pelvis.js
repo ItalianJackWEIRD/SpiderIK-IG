@@ -7,17 +7,12 @@ const _right = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
 export class PelvisController {
-  /**
-   * @param bone the Pelvis bone
-   * @param root the spiderRoot (to know the lateral direction of the body)
-   */
   constructor(bone, root) {
     this.bone = bone;
     this.root = root;
     this.rest = bone.position.clone();
-    // world scale of the parent (includes intermediate nodes from FBX export)
     this.s = bone.parent.getWorldScale(new THREE.Vector3()).x;
-    this.offset = new THREE.Vector3(); // x = body lateral, y = world up (world units)
+    this.offset = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.phase = 0;
     this.idlePhase = 0;
@@ -58,9 +53,8 @@ export class PelvisController {
     this.vel.addScaledVector(_accel, dt);
     this.offset.addScaledVector(this.vel, dt);
 
-    // --- convention-proof application: offset built in WORLD space,
-    // converted to the parent's local space every frame ---
-    _right.set(1, 0, 0).applyQuaternion(this.root.quaternion); // body right direction
+
+    _right.set(1, 0, 0).applyQuaternion(this.root.quaternion);
     _worldOff.set(0, this.offset.y, 0).addScaledVector(_right, this.offset.x);
     this.bone.parent.getWorldQuaternion(_q).invert();
     _worldOff.applyQuaternion(_q).divideScalar(this.s);

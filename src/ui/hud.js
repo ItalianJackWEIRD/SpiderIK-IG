@@ -1,16 +1,5 @@
 import { playerState } from '../game/state.js';
 
-/**
- * HTML HUD overlay (course requirement: HUD outside the WebGL canvas).
- * - big timer, top center: integer seconds, turns red below 10
- * - orb counter, top left
- * - stamina bar, bottom center: reads playerState from game/state.js
- *   (the agreed single contact point with Task A); recolors when exhausted
- * - game-over screen: dark overlay + Restart (location.reload() for now)
- *
- * Exports: initHUD(), updateHUD(timer, score), showGameOver(finalScore),
- *          popTimerDelta(seconds) — floating +N/-N next to the timer on pickup
- */
 
 const COLORS = {
   text: '#cfe9ff',
@@ -25,9 +14,9 @@ let timerEl = null;
 let scoreNumEl = null;
 let staminaFill = null;
 let overEl = null;
-let deltaPopupCount = 0; // stacking offset for active +N/-N popup
+let deltaPopupCount = 0;
 
-/** small glowing circle, mirrors the in-game orbs (avoids any logo-like glyph) */
+
 function orbDot(size, parent) {
   return el('span', `
     width: ${size}px; height: ${size}px; border-radius: 50%;
@@ -92,7 +81,6 @@ export function updateHUD(timer, score) {
     playerState.exhausted ? COLORS.staminaExhausted : COLORS.stamina;
 }
 
-/** floating +N / -N next to the timer, called once per orb pickup */
 export function popTimerDelta(seconds) {
   if (!timerBox || !seconds) return;
   const font = "'Segoe UI', system-ui, sans-serif";
@@ -151,12 +139,12 @@ export function showGameOver(finalScore) {
     cursor: pointer;
   `, overEl);
   btn.textContent = 'Restart';
-  btn.onclick = () => location.reload(); // full reset for now
+  btn.onclick = () => location.reload();
 }
 
 let pauseEl = null;
 
-/** dark overlay + "PAUSE" + controls panel (course requirement: controls list) */
+
 export function showPause() {
   if (pauseEl) return;
   const font = "'Segoe UI', system-ui, sans-serif";
@@ -171,7 +159,6 @@ export function showPause() {
     text-shadow: 0 0 22px ${COLORS.glow}; letter-spacing: 4px;
   `, pauseEl).textContent = 'PAUSE';
 
-  // controls panel in the top-right corner
   const box = el('div', `
     position: absolute; top: 22px; right: 22px;
     padding: 16px 20px; border-radius: 10px;

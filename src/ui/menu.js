@@ -1,12 +1,6 @@
 import { setMasterVolume, playMenuBlip, playMenuConfirm } from '../game/audio.js';
 
-/**
- * Keyboard-only main menu overlay. Up/Down move between rows,
- * Left/Right change slider values, Enter triggers Play.
- * Ground/sky/volume apply LIVE (the skybox behind updates as you scroll).
- *
- * initMainMenu({ onPlay, onGround, onSky, groundCount, skyCount, volume })
- */
+
 export function initMainMenu(opts) {
   const font = "'Segoe UI', system-ui, sans-serif";
   const C = { text: '#cfe9ff', accent: '#7fd4ff', glow: 'rgba(102,204,255,0.75)' };
@@ -17,7 +11,7 @@ export function initMainMenu(opts) {
   ];
 
   const state = {
-    volume: opts.volume ?? 100, // 0..100, master
+    volume: opts.volume ?? 100,
     diff: 1,
     ground: 1,
     sky: 1,
@@ -43,7 +37,6 @@ export function initMainMenu(opts) {
   `;
   root.appendChild(title);
 
-  // 4 rows: Play, Volume, Ground, Skybox
   const rows = [
     { key: 'play', label: 'PLAY' },
     { key: 'diff', label: 'Difficulty' },
@@ -91,7 +84,7 @@ export function initMainMenu(opts) {
   render();
 
   function cycle(v, delta, count) {
-    return ((v - 1 + delta) % count + count) % count + 1; // wrap 1..count
+    return ((v - 1 + delta) % count + count) % count + 1;
   }
 
   function onKey(e) {
@@ -109,7 +102,7 @@ export function initMainMenu(opts) {
           state.volume = Math.max(0, Math.min(100, state.volume + dir * 5));
           setMasterVolume(state.volume / 100);
         } else if (key === 'diff') {
-          state.diff = (state.diff + dir + DIFFS.length) % DIFFS.length; // wrap Easy↔Hard
+          state.diff = (state.diff + dir + DIFFS.length) % DIFFS.length;
           opts.onDifficulty(DIFFS[state.diff].key);
         } else if (key === 'ground') {
           state.ground = cycle(state.ground, dir, opts.groundCount);

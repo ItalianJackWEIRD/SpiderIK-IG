@@ -1,22 +1,15 @@
 import * as THREE from 'three';
 
-// Uniforms SHARED across all curved materials: a single update per frame
 export const curveUniforms = {
   uSpiderPos: { value: new THREE.Vector2(0, 0) },
-  uCurveR: { value: 127 },     // curvature radius: small = small moon
+  uCurveR: { value: 127 },
   uHeightMap: { value: null },
-  uHeightAmp: { value: 1.8 }, // height of the horizon relief
-  uGateStart: { value: 14 },  // relief starts growing from here...
-  uGateEnd: { value: 26 },    // ...and reaches full height here (play area: flat)
+  uHeightAmp: { value: 1.8 },
+  uGateStart: { value: 14 },
+  uGateEnd: { value: 26 },
 };
 
-/**
- * Injects the "tiny planet" curvature into a standard material.
- * Vertices are lowered by dist²/R relative to the spider (visual only:
- * game logic stays flat). With withHeight, beyond the gate a relief
- * sampled from the height map is added, with period 40 = the wrap cell,
- * so the horizon is identical before and after the teleport.
- */
+
 export function makeCurved(material, { withHeight = false } = {}) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, curveUniforms);
@@ -43,7 +36,6 @@ export function makeCurved(material, { withHeight = false } = {}) {
         gl_Position = projectionMatrix * mvPosition;
       `);
   };
-  // explicit cache key: prevents different variants from sharing the shader
   material.customProgramCacheKey = () => 'curved' + (withHeight ? '+h' : '');
   material.needsUpdate = true;
 }
